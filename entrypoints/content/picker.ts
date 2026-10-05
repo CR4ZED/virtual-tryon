@@ -44,6 +44,7 @@ export function startPicker(doc: Document, onPick: (url: string) => void, onEnd:
   const onClick = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    target = imageElementAt(doc, e.clientX, e.clientY, host);
     const url = target ? bestImageUrl(target, doc.baseURI) : null;
     if (!url) {
       hint.textContent = `No image here. ${HINT}`;
@@ -56,12 +57,19 @@ export function startPicker(doc: Document, onPick: (url: string) => void, onEnd:
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.preventDefault();
+    e.stopImmediatePropagation();
     stop();
   };
 
   const timer = setTimeout(stop, PICKER_TIMEOUT_MS);
   layer.addEventListener('pointermove', onMove);
   layer.addEventListener('click', onClick);
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'contextmenu', 'touchstart']) {
+    layer.addEventListener(type, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
   doc.addEventListener('keydown', onKey, true);
 
   function stop() {

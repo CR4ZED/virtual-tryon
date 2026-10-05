@@ -14,12 +14,15 @@ describe('mountButton', () => {
     const { host } = mountButton(document, vi.fn());
     expect(host.previousElementSibling?.id).toBe('cta');
     expect(host.nextElementSibling?.id).toBe('next');
+    expect(host.style.display).toBe('block');
+    expect(host.style.getPropertyPriority('display')).toBe('important');
   });
 
   it('floats bottom-right when no CTA exists, and removes cleanly', () => {
     document.body.innerHTML = '<p>No buttons</p>';
     const { host, remove } = mountButton(document, vi.fn());
     expect(host.parentElement).toBe(document.body);
+    expect(host.style.position).toBe('fixed');
     remove();
     expect(host.isConnected).toBe(false);
   });

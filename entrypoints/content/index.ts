@@ -14,16 +14,24 @@ export default defineContentScript({
     let stopPicker: (() => void) | null = null;
     let lastUrl = '';
     let attempts = 0;
+    let mounts = 0;
     let scheduled = false;
 
     // No receiver (panel closed) is normal; ignore that rejection.
-    const send = (msg: Message) => browser.runtime.sendMessage(msg).catch(() => {});
+    const send = (msg: Message) => {
+      try {
+        return browser.runtime.sendMessage(msg).catch(() => {});
+      } catch {
+        // Extension context invalidated (extension reloaded); nothing to do.
+      }
+    };
 
     function scan() {
       scheduled = false;
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         attempts = 0;
+        mounts = 0;
         button?.remove();
         button = null;
       }
@@ -36,7 +44,7 @@ export default defineContentScript({
         void send({ type: 'productChanged', product });
       }
       button?.remove();
-      button = product ? mountButton(document, () => void send({ type: 'openPanel' })) : null;
+      button = product && mounts < MAX_ATTEMPTS_PER_URL && ++mounts ? mountButton(document, () => void send({ type: 'openPanel' })) : null;
     }
 
     // Product pages render late and SPAs re-render; rescan at most once per second.

@@ -6,17 +6,15 @@ const SHIRT_PATH =
 
 const CSS = `
 :host { all: initial; }
-:host(.inline) { display: block; margin: 8px 0; }
-:host(.floating) { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; }
 button {
   all: initial; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; min-width: 140px; height: var(--h); padding: 0 20px; cursor: pointer;
   background: var(--bg); color: var(--fg); border-radius: var(--radius);
   font-family: var(--font); font-size: var(--size); font-weight: 600; transition: filter .15s;
 }
-:host(.floating) button { width: auto; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+button[data-floating] { width: auto; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
 button:hover { filter: brightness(1.08); }
-button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid var(--fg); outline-offset: -4px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
 svg { width: 18px; height: 18px; flex: none; }`;
 
 /** The CTA plus wrappers that share its visual box (e.g. Amazon's input inside .a-button). */
@@ -53,14 +51,18 @@ export function mountButton(doc: Document, onClick: () => void): { host: HTMLEle
   const theme = cta ? buttonTheme(chain) : FALLBACK_THEME;
 
   const host = doc.createElement('virtual-tryon-button');
-  host.className = cta ? 'inline' : 'floating';
+  const hostStyle: Record<string, string> = cta
+    ? { display: 'block', margin: '8px 0' }
+    : { position: 'fixed', right: '20px', bottom: '20px', 'z-index': '2147483647' };
+  for (const [k, v] of Object.entries(hostStyle)) host.style.setProperty(k, v, 'important');
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = doc.createElement('style');
   style.textContent = CSS;
 
   const button = doc.createElement('button');
   button.type = 'button';
-  button.setAttribute('aria-label', 'Virtual try-on: see yourself wearing this item');
+  if (!cta) button.dataset.floating = '';
+  button.setAttribute('aria-label', 'Try On: see yourself wearing this item');
   button.style.setProperty('--bg', theme.background);
   button.style.setProperty('--fg', theme.color);
   button.style.setProperty('--radius', theme.borderRadius);
