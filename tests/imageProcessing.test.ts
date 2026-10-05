@@ -7,6 +7,10 @@ describe('fitWithin', () => {
     expect(fitWithin(3000, 4000)).toEqual({ width: 1152, height: 1536 });
     expect(fitWithin(800, 600)).toEqual({ width: 800, height: 600 });
   });
+
+  it('guards against zero dimensions in extreme aspect ratios', () => {
+    expect(fitWithin(1, 5000)).toEqual({ width: 1, height: 1536 });
+  });
 });
 
 describe('nearestAspectRatio', () => {

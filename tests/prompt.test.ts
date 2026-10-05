@@ -8,6 +8,7 @@ describe('buildPrompt', () => {
     expect(p).toContain('Image 4 is a product photo of "Linen Shirt".');
     expect(p).toContain('Keep the exact same pose, framing and camera angle as image 1.');
     expect(p).toContain('Do not beautify, slim, smooth skin, retouch, add makeup or apply filters.');
+    expect(p).toContain('Do not change apparent age, gender or ethnicity.');
   });
 
   it('re-poses when asked and handles zero references', () => {
@@ -15,6 +16,8 @@ describe('buildPrompt', () => {
     expect(p).not.toContain('identity reference');
     expect(p).toContain('Image 2 is a product photo.');
     expect(p).toContain('Re-pose the person to match the pose of the model in image 2');
+    expect(p).not.toContain('camera framing');
+    expect(p).toContain('Do not change apparent age, gender or ethnicity.');
   });
 
   it('uses singular wording for one reference', () => {

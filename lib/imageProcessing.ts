@@ -4,7 +4,7 @@ const ASPECT_RATIOS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', 
 
 export function fitWithin(w: number, h: number, max = MAX_EDGE): { width: number; height: number } {
   const scale = Math.min(1, max / Math.max(w, h));
-  return { width: Math.round(w * scale), height: Math.round(h * scale) };
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
 }
 
 export function nearestAspectRatio(w: number, h: number): string {
@@ -31,6 +31,8 @@ export async function normalizeImage(blob: Blob, maxEdge = MAX_EDGE): Promise<{ 
     if (!ctx) throw new Error('Canvas is unavailable.');
     ctx.fillStyle = '#fff'; // transparent PNG pixels would otherwise become black in JPEG
     ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, 0, 0, width, height);
     return { blob: await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 }), width, height };
   } finally {
