@@ -19,9 +19,15 @@ const CTA_TEXT = /\badd to (shopping )?(cart|bag|basket|trolley)\b|\bbuy now\b/i
 const PRICE = /(₹|rs\.?|inr|\$|€|£|usd|eur|gbp|aed|sar)\s?\d[\d,]*(\.\d{1,2})?/i;
 const MIN_IMAGE_AREA = 200 * 200;
 
+const PRICE_ONLY = new RegExp(`^${PRICE.source}$`, 'i');
+const MAX_JSON_LD = 500_000;
+const MAX_IMAGES = 200;
+const APPAREL_G = new RegExp(APPAREL.source, 'gi');
+const NON_APPAREL_G = new RegExp(NON_APPAREL_ITEMS.source, 'gi');
+
 function lastMatchIndex(re: RegExp, text: string): number {
   let last = -1;
-  for (const m of text.matchAll(new RegExp(re.source, 'gi'))) last = m.index ?? last;
+  for (const m of text.matchAll(re)) last = m.index ?? last;
   return last;
 }
 
@@ -32,8 +38,8 @@ function lastMatchIndex(re: RegExp, text: string): number {
  */
 export function isClothing(title: string, context: string): boolean {
   if (NOT_APPAREL_PHRASES.test(title)) return false;
-  const apparel = lastMatchIndex(APPAREL, title);
-  const other = lastMatchIndex(NON_APPAREL_ITEMS, title);
+  const apparel = lastMatchIndex(APPAREL_G, title);
+  const other = lastMatchIndex(NON_APPAREL_G, title);
   if (apparel >= 0) return apparel > other;
   return other < 0 && APPAREL.test(context);
 }
@@ -71,6 +77,7 @@ function jsonLdNodes(doc: Document): LdNode[] {
     }
   };
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    if ((s.textContent?.length ?? 0) > MAX_JSON_LD) continue;
     try {
       visit(JSON.parse(s.textContent ?? ''));
     } catch {
@@ -120,7 +127,7 @@ function findPrice(doc: Document): string | null {
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(), seen = 0; n && seen < 5000; n = walker.nextNode(), seen++) {
     const t = n.textContent?.trim() ?? '';
-    if (t.length < 30 && new RegExp(`^${PRICE.source}$`, 'i').test(t) && n.parentElement && isVisible(n.parentElement)) return t;
+    if (t.length < 30 && PRICE_ONLY.test(t) && n.parentElement && isVisible(n.parentElement)) return t;
   }
   return null;
 }
@@ -137,6 +144,15 @@ function dedupe(urls: string[]): string[] {
 }
 
 export function detectProduct(doc: Document, pageUrl: string): ProductInfo | null {
+  try {
+    return detect(doc, pageUrl);
+  } catch {
+    // Hostile or odd pages must never break the host page's scan loop.
+    return null;
+  }
+}
+
+function detect(doc: Document, pageUrl: string): ProductInfo | null {
   const nodes = jsonLdNodes(doc);
   const ld = nodes.find((n) => hasType(n, 'Product') || hasType(n, 'ProductGroup'));
   const meta = (name: string) =>
@@ -153,15 +169,20 @@ export function detectProduct(doc: Document, pageUrl: string): ProductInfo | nul
     doc.querySelectorAll('nav[aria-label*="breadcrumb" i], [class*="breadcrumb" i], [id*="breadcrumb" i]'),
     (e) => e.textContent ?? '',
   ).join(' ');
-  const ldCrumbs = nodes.filter((n) => hasType(n, 'BreadcrumbList')).map((n) => JSON.stringify(n.itemListElement ?? ''));
+  const ldCrumbs = nodes.filter((n) => hasType(n, 'BreadcrumbList')).map((n) => {
+    const items = n.itemListElement;
+    return Array.isArray(items) && items.length <= 50 ? JSON.stringify(items) : '';
+  });
   const context = [text(ld?.category), crumbs.slice(0, 2000), ldCrumbs.join(' ').slice(0, 2000), h1, meta('og:title') ?? ''].join(' ');
   if (!isClothing(title, context)) return null;
 
   // ponytail: "largest visible image on the page"; scope to the h1's container if banners get picked.
-  const pageImages = Array.from(doc.querySelectorAll('img'))
-    .filter((img) => imageArea(img) >= MIN_IMAGE_AREA && isVisible(img))
-    .sort((a, b) => imageArea(b) - imageArea(a))
-    .map((img) => bestImageUrl(img, pageUrl));
+  const pageImages = Array.from(doc.querySelectorAll('img')).slice(0, MAX_IMAGES)
+    .map((img) => ({ img, area: imageArea(img) }))
+    .filter(({ area }) => area >= MIN_IMAGE_AREA)
+    .filter(({ img }) => isVisible(img))
+    .sort((a, b) => b.area - a.area)
+    .map(({ img }) => bestImageUrl(img, pageUrl));
   const candidates = [...imageUrls(ld?.image).map((u) => toHttpsUrl(u, pageUrl)), toHttpsUrl(meta('og:image'), pageUrl), ...pageImages];
   const images = dedupe(candidates.filter((u): u is string => u !== null));
 

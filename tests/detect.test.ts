@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectProduct, isClothing } from '@/lib/detect';
+import { detectProduct, findCta, isClothing } from '@/lib/detect';
 import { AMAZON, BLOG, FLIPKART, HEADPHONES, MYNTRA, OBFUSCATED_PRICE, PHONE_CASE, SHOPIFY } from './fixtures';
 
 function detect(html: string, url: string) {
@@ -49,6 +49,22 @@ describe('detectProduct', () => {
 
   it('finds prices in obfuscated markup via text scan', () => {
     expect(detect(OBFUSCATED_PRICE, 'https://shop.example.com/p/jeans')?.price).toBe('₹999');
+  });
+
+  it('survives malformed JSON-LD', () => {
+    const p = detect('<script type="application/ld+json">{not json</script>' + SHOPIFY, 'https://www.bombayshirts.com/products/oxford');
+    expect(p?.title).toBe('Oxford Button-Down Shirt');
+  });
+
+  it('does not throw on deeply nested JSON-LD', () => {
+    const ld = '{"@type":"Product","name":' + '['.repeat(20000) + '"x"' + ']'.repeat(20000) + '}';
+    const html = `<script type="application/ld+json">${ld}</script><h1>Shirt</h1><div class="price">$10</div><button>Add to cart</button>`;
+    expect(() => detect(html, 'https://shop.example.com/p/1')).not.toThrow();
+  });
+
+  it('findCta ignores hidden buttons', () => {
+    document.body.innerHTML = '<div style="display:none"><button>Add to cart</button></div>';
+    expect(findCta(document)).toBeNull();
   });
 
   it.each([
