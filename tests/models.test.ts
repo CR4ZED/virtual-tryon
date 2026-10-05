@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { GEMINI_MODELS_ENDPOINT, OPENAI_MODELS_ENDPOINT, listGeminiModels, listOpenAIModels } from '@/lib/providers/models';
+import { GEMINI_MODELS_ENDPOINT, OPENAI_MODELS_ENDPOINT, listGeminiModels, listOpenAIModels, preservesIdentity } from '@/lib/providers/models';
 
 describe('listGeminiModels', () => {
   it('keeps only Gemini image models, strips the models/ prefix and follows pages', async () => {
@@ -48,10 +48,8 @@ describe('listOpenAIModels', () => {
     const fetchFn = vi.fn<typeof fetch>(async () =>
       Response.json({ object: 'list', data: [{ id: 'gpt-5' }, { id: 'gpt-image-2' }, { id: 'dall-e-3' }, { id: 'gpt-image-1-mini' }] }),
     );
-    expect(await listOpenAIModels('k', undefined, fetchFn)).toEqual([
-      { provider: 'openai', id: 'gpt-image-2', label: 'gpt-image-2' },
-      { provider: 'openai', id: 'gpt-image-1-mini', label: 'gpt-image-1-mini' },
-    ]);
+    // gpt-image-1-mini is left out: it cannot keep the user's face and body unchanged.
+    expect(await listOpenAIModels('k', undefined, fetchFn)).toEqual([{ provider: 'openai', id: 'gpt-image-2', label: 'gpt-image-2' }]);
     expect(fetchFn.mock.calls[0]![0]).toBe(OPENAI_MODELS_ENDPOINT);
     expect((fetchFn.mock.calls[0]![1]?.headers as Record<string, string>).Authorization).toBe('Bearer k');
   });
@@ -59,5 +57,20 @@ describe('listOpenAIModels', () => {
   it('maps 401 to an auth error and a malformed body to a provider error', async () => {
     await expect(listOpenAIModels('bad', undefined, async () => Response.json({ error: { message: 'Incorrect API key provided' } }, { status: 401 }))).rejects.toMatchObject({ kind: 'auth' });
     await expect(listOpenAIModels('k', undefined, async () => Response.json({ object: 'list' }))).rejects.toMatchObject({ kind: 'provider' });
+  });
+});
+
+describe('preservesIdentity', () => {
+  it.each([
+    ['openai', 'gpt-image-2', true],
+    ['openai', 'gpt-image-1', true],
+    ['openai', 'gpt-image-1.5-2026-01-01', true],
+    ['openai', 'gpt-image-1-mini', false],
+    ['openai', 'gpt-image-1-mini-2025-10-06', false],
+    ['openai', 'dall-e-3', false],
+    ['gemini', 'gemini-3.1-flash-image', true],
+    ['gemini', 'imagen-4.0-generate-001', false],
+  ] as const)('%s %s -> %s', (provider, id, expected) => {
+    expect(preservesIdentity(provider, id)).toBe(expected);
   });
 });

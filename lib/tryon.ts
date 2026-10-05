@@ -5,6 +5,7 @@ import { nearestAspectRatio, normalizeImage } from './imageProcessing';
 import { buildPrompt } from './prompt';
 import { TryOnError, type GenerateInput } from './providers/common';
 import { generateGemini } from './providers/gemini';
+import { preservesIdentity } from './providers/models';
 import { generateOpenAI } from './providers/openai';
 
 export interface TryOnRequest {
@@ -27,6 +28,10 @@ export async function runTryOn(req: TryOnRequest, signal: AbortSignal): Promise<
     providerName = settings.provider === 'gemini' ? 'Gemini' : 'OpenAI';
     const apiKey = settings.provider === 'gemini' ? settings.geminiKey : settings.openaiKey;
     if (!apiKey) throw new TryOnError('auth', `Add your ${providerName} API key in Settings.`);
+    const model = settings.provider === 'gemini' ? settings.geminiModel : settings.openaiModel;
+    if (!preservesIdentity(settings.provider, model)) {
+      throw new TryOnError('auth', `${model} can't keep your face and body unchanged. Choose another model in Settings.`);
+    }
 
     const photos = await listPhotos();
     const base = photos.find((p) => p.id === req.basePhotoId) ?? photos.find((p) => p.primary);
@@ -40,7 +45,7 @@ export async function runTryOn(req: TryOnRequest, signal: AbortSignal): Promise<
     });
     const input: GenerateInput = {
       apiKey,
-      model: settings.provider === 'gemini' ? settings.geminiModel : settings.openaiModel,
+      model,
       prompt: buildPrompt({ title: req.title, refCount: refs.length, matchPose: req.matchPose }),
       images: [base.blob, ...refs.map((r) => r.blob), garment.blob],
       aspectRatio: nearestAspectRatio(base.width, base.height),

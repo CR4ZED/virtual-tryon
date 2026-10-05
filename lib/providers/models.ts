@@ -13,7 +13,14 @@ export const OPENAI_MODELS_ENDPOINT = 'https://api.openai.com/v1/models';
 // purpose: it generates from text alone and cannot dress an existing photo.
 const GEMINI_IMAGE = /^gemini-.*image/;
 const OPENAI_IMAGE = /^gpt-image-/;
+// gpt-image-1-mini has no input_fidelity option, so it redraws faces and bodies
+// freely; it cannot meet the "do not change the person" requirement.
+const OPENAI_LOW_FIDELITY = /^gpt-image-1-mini/;
 const MAX_PAGES = 5;
+
+export function preservesIdentity(provider: ProviderId, id: string): boolean {
+  return provider === 'gemini' ? GEMINI_IMAGE.test(id) : OPENAI_IMAGE.test(id) && !OPENAI_LOW_FIDELITY.test(id);
+}
 
 async function json<T>(res: Response, provider: string): Promise<T> {
   try {
@@ -34,7 +41,7 @@ export async function listGeminiModels(apiKey: string, signal?: AbortSignal, fet
     const models = Array.isArray(body?.models) ? (body.models as Array<{ name?: unknown; displayName?: unknown }>) : [];
     for (const m of models) {
       const id = typeof m.name === 'string' ? m.name.replace(/^models\//, '') : '';
-      if (!GEMINI_IMAGE.test(id)) continue;
+      if (!preservesIdentity('gemini', id)) continue;
       out.push({ provider: 'gemini', id, label: typeof m.displayName === 'string' && m.displayName ? m.displayName : id });
     }
     if (typeof body?.nextPageToken !== 'string' || !body.nextPageToken) break;
@@ -49,7 +56,7 @@ export async function listOpenAIModels(apiKey: string, signal?: AbortSignal, fet
   const body = await json<{ data?: unknown }>(res, 'OpenAI');
   if (!Array.isArray(body?.data)) throw new TryOnError('provider', 'OpenAI returned an unexpected response.');
   return (body.data as Array<{ id?: unknown }>).flatMap((m) =>
-    typeof m.id === 'string' && OPENAI_IMAGE.test(m.id) ? [{ provider: 'openai' as const, id: m.id, label: m.id }] : [],
+    typeof m.id === 'string' && preservesIdentity('openai', m.id) ? [{ provider: 'openai' as const, id: m.id, label: m.id }] : [],
   );
 }
 

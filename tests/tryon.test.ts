@@ -45,6 +45,11 @@ describe('runTryOn', () => {
     await expect(runTryOn(req, new AbortController().signal)).rejects.toMatchObject({ kind: 'auth' });
   });
 
+  it('refuses models that cannot keep the face and body unchanged', async () => {
+    await saveSettings({ provider: 'openai', openaiKey: 'k', openaiModel: 'gpt-image-1-mini' });
+    await expect(runTryOn(req, new AbortController().signal)).rejects.toMatchObject({ kind: 'auth', message: expect.stringContaining('gpt-image-1-mini') });
+  });
+
   it('requires a photo', async () => {
     await saveSettings({ geminiKey: 'k' });
     await expect(runTryOn(req, new AbortController().signal)).rejects.toMatchObject({ kind: 'no_photos' });
