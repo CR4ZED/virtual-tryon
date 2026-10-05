@@ -32,6 +32,10 @@ describe('generateGemini', () => {
     });
   });
 
+  it('maps a non-JSON 200 to a provider error', async () => {
+    await expect(generateGemini(input, async () => new Response('not json'))).rejects.toMatchObject({ kind: 'provider' });
+  });
+
   it('treats a response with no image as a refusal', async () => {
     const fetchFn = async () => Response.json({ steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I cannot help' }] }] });
     await expect(generateGemini(input, fetchFn)).rejects.toMatchObject({ kind: 'refused' });
@@ -69,6 +73,11 @@ describe('generateOpenAI', () => {
     expect(buildOpenAIForm({ ...base, model: 'gpt-image-1' }).get('input_fidelity')).toBe('high');
     expect(buildOpenAIForm({ ...base, model: 'gpt-image-1.5-2026-01-01' }).get('input_fidelity')).toBe('high');
     expect(buildOpenAIForm({ ...base, model: 'gpt-image-1-mini' }).get('input_fidelity')).toBeNull();
+  });
+
+  it('maps undecodable base64 to a provider error', async () => {
+    const fetchFn = async () => Response.json({ data: [{ b64_json: '***' }] });
+    await expect(generateOpenAI(input, fetchFn)).rejects.toMatchObject({ kind: 'provider' });
   });
 
   it('maps moderation and auth errors', async () => {

@@ -43,3 +43,13 @@ export async function readErrorMessage(res: Response): Promise<string> {
     return res.statusText;
   }
 }
+
+/** Parses a 2xx body; malformed JSON or undecodable base64 becomes a provider error, aborts pass through. */
+export async function parseOkResponse(provider: string, res: Response, signal: AbortSignal, parse: (body: unknown) => Blob): Promise<Blob> {
+  try {
+    return parse(await res.json());
+  } catch (e) {
+    if (e instanceof TryOnError || signal.aborted) throw e;
+    throw new TryOnError('provider', `${provider} returned an unexpected response.`);
+  }
+}

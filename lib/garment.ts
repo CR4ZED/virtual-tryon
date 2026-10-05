@@ -3,13 +3,20 @@ import { MAX_GARMENT_BYTES, isSafeHttpsUrl, sniffImageType } from './validate';
 
 const PICK_HINT = 'Use "Pick image" to choose another photo.';
 
-async function readCapped(res: Response, max: number): Promise<Blob | null> {
+async function readCapped(res: Response, max: number, signal: AbortSignal): Promise<Blob | null> {
   if (!res.body) return new Blob([]);
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await reader.read();
+    } catch (e) {
+      if (signal.aborted) throw e;
+      throw new TryOnError('garment', `Could not download the product image. ${PICK_HINT}`);
+    }
+    const { done, value } = chunk;
     if (done) break;
     total += value.byteLength;
     if (total > max) {
@@ -32,10 +39,11 @@ export async function fetchGarment(url: string, signal: AbortSignal, fetchFn: Fe
     throw new TryOnError('garment', `Could not download the product image. ${PICK_HINT}`);
   }
   if (!res.ok) throw new TryOnError('garment', `The store refused the product image (HTTP ${res.status}). ${PICK_HINT}`);
-  if (res.url && !isSafeHttpsUrl(res.url)) throw new TryOnError('garment', `The product image redirected to a blocked address. ${PICK_HINT}`);
+  // ponytail: fetch follows redirects before we can check them, so a redirect to a private host still sends one blind GET (no data returned to us). Any web page can already cause the same request via <img>; redirect:'manual' would break legitimate CDN redirects.
+  if (!isSafeHttpsUrl(res.url)) throw new TryOnError('garment', `The product image redirected to a blocked address. ${PICK_HINT}`);
   const tooLarge = new TryOnError('garment', `The product image is larger than 15 MB. ${PICK_HINT}`);
   if (Number(res.headers.get('content-length')) > MAX_GARMENT_BYTES) throw tooLarge;
-  const blob = await readCapped(res, MAX_GARMENT_BYTES);
+  const blob = await readCapped(res, MAX_GARMENT_BYTES, signal);
   if (!blob) throw tooLarge;
   if (!sniffImageType(new Uint8Array(await blob.slice(0, 16).arrayBuffer()))) {
     throw new TryOnError('garment', `The selected file is not a supported image. ${PICK_HINT}`);

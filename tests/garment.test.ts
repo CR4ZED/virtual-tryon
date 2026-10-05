@@ -29,6 +29,15 @@ describe('fetchGarment', () => {
     await expect(fetchGarment(URL_OK, signal, async () => response(PNG, {}, 'https://192.168.0.10/a.png'))).rejects.toMatchObject({ kind: 'garment' });
   });
 
+  it('fails closed when the final url is unknown', async () => {
+    await expect(fetchGarment(URL_OK, signal, async () => response(PNG, {}, ''))).rejects.toMatchObject({ kind: 'garment' });
+  });
+
+  it('maps a mid-stream read failure to a garment error', async () => {
+    const body = new ReadableStream({ pull: () => { throw new Error('boom'); } });
+    await expect(fetchGarment(URL_OK, signal, async () => response(body))).rejects.toMatchObject({ kind: 'garment' });
+  });
+
   it('enforces the size cap while streaming even if content-length lies', async () => {
     const big = new Uint8Array(MAX_GARMENT_BYTES + 1);
     big.set(PNG);

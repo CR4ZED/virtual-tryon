@@ -1,5 +1,5 @@
 import { base64ToBlob } from '../imageProcessing';
-import { REFUSED_MESSAGE, TryOnError, httpError, readErrorMessage, type FetchFn, type GenerateInput } from './common';
+import { REFUSED_MESSAGE, TryOnError, httpError, parseOkResponse, readErrorMessage, type FetchFn, type GenerateInput } from './common';
 
 export const OPENAI_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
@@ -26,7 +26,7 @@ export async function generateOpenAI(input: GenerateInput, fetchFn: FetchFn = fe
     signal: input.signal,
   });
   if (!res.ok) throw httpError('OpenAI', res.status, await readErrorMessage(res));
-  return parseOpenAIResponse(await res.json());
+  return parseOkResponse('OpenAI', res, input.signal, parseOpenAIResponse);
 }
 
 export function parseOpenAIResponse(body: unknown): Blob {

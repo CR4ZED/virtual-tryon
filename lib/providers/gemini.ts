@@ -1,5 +1,5 @@
 import { base64ToBlob, blobToBase64 } from '../imageProcessing';
-import { REFUSED_MESSAGE, TryOnError, httpError, readErrorMessage, type FetchFn, type GenerateInput } from './common';
+import { REFUSED_MESSAGE, TryOnError, httpError, parseOkResponse, readErrorMessage, type FetchFn, type GenerateInput } from './common';
 
 export const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
@@ -18,7 +18,7 @@ export async function generateGemini(input: GenerateInput, fetchFn: FetchFn = fe
     signal: input.signal,
   });
   if (!res.ok) throw httpError('Gemini', res.status, await readErrorMessage(res));
-  return parseGeminiResponse(await res.json());
+  return parseOkResponse('Gemini', res, input.signal, parseGeminiResponse);
 }
 
 interface Step {
