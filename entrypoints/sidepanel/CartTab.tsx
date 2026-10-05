@@ -11,10 +11,12 @@ import { isSafeHttpsUrl } from '@/lib/validate';
 
 const MAX_TABS = 10;
 
-function openTabs(urls: string[]) {
-  const safe = urls.filter(isSafeHttpsUrl).slice(0, MAX_TABS);
-  if (safe.length > 5 && !confirm(`Open ${safe.length} tabs?`)) return;
-  for (const url of safe) void browser.tabs.create({ url, active: false });
+function openTabs(urls: string[], active = false) {
+  const valid = urls.filter(isSafeHttpsUrl);
+  const safe = valid.slice(0, MAX_TABS);
+  const msg = valid.length > MAX_TABS ? `Open the first ${MAX_TABS} of ${valid.length} items?` : `Open ${safe.length} tabs?`;
+  if (safe.length > 5 && !confirm(msg)) return;
+  for (const url of safe) void browser.tabs.create({ url, active });
 }
 
 function ItemRow({ item }: { item: CartItem }) {
@@ -29,7 +31,7 @@ function ItemRow({ item }: { item: CartItem }) {
     <li className="flex gap-3 py-3">
       {image ? <img src={image} alt="" className="h-20 w-16 shrink-0 rounded-md bg-muted object-cover" /> : <div className="h-20 w-16 shrink-0 rounded-md bg-muted" />}
       <div className="grid min-w-0 flex-1 gap-1.5">
-        <button type="button" className="line-clamp-2 text-left text-sm font-medium hover:underline" onClick={() => openTabs([item.productUrl])}>
+        <button type="button" className="line-clamp-2 text-left text-sm font-medium hover:underline" onClick={() => openTabs([item.productUrl], true)}>
           {item.title}
         </button>
         {item.price && <p className="text-muted-foreground text-xs">{item.price}</p>}

@@ -7,6 +7,7 @@ export interface ActiveTab {
   id: number;
   url: string;
   title: string;
+  status: string;
 }
 
 export function useActiveTab(): ActiveTab | null {
@@ -14,7 +15,7 @@ export function useActiveTab(): ActiveTab | null {
   useEffect(() => {
     const refresh = async () => {
       const [t] = await browser.tabs.query({ active: true, currentWindow: true });
-      setTab(t?.id === undefined ? null : { id: t.id, url: t.url ?? '', title: t.title ?? '' });
+      setTab(t?.id === undefined ? null : { id: t.id, url: t.url ?? '', title: t.title ?? '', status: t.status ?? '' });
     };
     const onUpdated = (_id: number, info: { status?: string; url?: string }) => {
       if (info.status === 'complete' || info.url) void refresh();
@@ -39,12 +40,12 @@ function pickedProduct(tab: ActiveTab, garmentImage: string): ProductInfo | null
 export function useProduct(tab: ActiveTab | null) {
   const [product, setProduct] = useState<ProductInfo | null>(null);
   const [garmentUrl, setGarmentUrl] = useState<string | null>(null);
-  const [reachable, setReachable] = useState(false);
+  const [reachable, setReachable] = useState<boolean | null>(null);
 
   useEffect(() => {
     setProduct(null);
     setGarmentUrl(null);
-    setReachable(false);
+    setReachable(null);
     if (!tab) return;
     let live = true;
     browser.tabs
@@ -58,6 +59,8 @@ export function useProduct(tab: ActiveTab | null) {
       })
       .catch(() => {
         // No content script: browser page, http page, or tab opened before install.
+        // Only conclude that once the page finished loading; before that the script may not be listening yet.
+        if (live && tab.status === 'complete') setReachable(false);
       });
 
     const onMessage = (raw: unknown, sender: { id?: string; tab?: { id?: number } }) => {
@@ -77,7 +80,7 @@ export function useProduct(tab: ActiveTab | null) {
       live = false;
       browser.runtime.onMessage.removeListener(onMessage);
     };
-  }, [tab?.id, tab?.url]);
+  }, [tab?.id, tab?.url, tab?.status]);
 
   const startPicker = () => {
     if (tab) void browser.tabs.sendMessage(tab.id, { type: 'startPicker' } satisfies Message).catch(() => {});

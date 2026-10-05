@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useObjectUrl } from '@/hooks/useObjectUrl';
 import { usePhotos, useSettings } from '@/hooks/useData';
-import { addToCart } from '@/lib/cart';
+import { addToCart, getCart, onCartChanged, type CartItem } from '@/lib/cart';
 import { latestResultFor, type PhotoRecord, type ResultRecord } from '@/lib/db';
 import { TryOnError } from '@/lib/providers/common';
 import { runTryOn } from '@/lib/tryon';
@@ -72,7 +72,7 @@ export function TryOnTab() {
   const [matchPose, setMatchPose] = useState(false);
   const [result, setResult] = useState<ResultRecord | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
-  const [added, setAdded] = useState(false);
+  const [inCart, setInCart] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const base = photos?.find((p) => p.id === baseId) ?? photos?.find((p) => p.primary) ?? null;
@@ -84,9 +84,23 @@ export function TryOnTab() {
   useEffect(() => {
     abortRef.current?.abort();
     setResult(null);
-    setAdded(false);
     setStatus({ kind: 'idle' });
-    if (product) void latestResultFor(product.url).then((r) => setResult(r ?? null));
+    let live = true;
+    if (product) void latestResultFor(product.url).then((r) => live && setResult(r ?? null));
+    return () => {
+      live = false;
+    };
+  }, [product?.url]);
+  useEffect(() => {
+    const url = product?.url.split('#', 1)[0];
+    const sync = (items: CartItem[]) => setInCart(items.some((i) => i.productUrl === url));
+    let live = true;
+    void getCart().then((items) => live && sync(items));
+    const off = onCartChanged(sync);
+    return () => {
+      live = false;
+      off();
+    };
   }, [product?.url]);
 
   if (!photos || !settings) return null;
@@ -106,7 +120,7 @@ export function TryOnTab() {
     const isWebPage = tab ? /^https:/.test(tab.url) : false;
     return (
       <Message title={isWebPage ? 'No clothing item detected on this page' : 'Open a clothing product page'}>
-        {isWebPage && reachable && (
+        {isWebPage && reachable === true && (
           <>
             <p>Pick the product photo yourself to try it on.</p>
             <Button variant="outline" onClick={startPicker}>
@@ -114,7 +128,7 @@ export function TryOnTab() {
             </Button>
           </>
         )}
-        {isWebPage && !reachable && tab && (
+        {isWebPage && reachable === false && tab && (
           <>
             <p>This tab was opened before the extension was installed.</p>
             <Button variant="outline" onClick={() => void browser.tabs.reload(tab.id)}>
@@ -138,10 +152,11 @@ export function TryOnTab() {
     setStatus({ kind: 'running', startedAt: Date.now() });
     try {
       const rec = await runTryOn({ productUrl: product.url, garmentUrl, title: product.title, basePhotoId: base.id, matchPose }, ctrl.signal);
+      if (ctrl.signal.aborted) return;
       setResult(rec);
-      setAdded(false);
       setStatus({ kind: 'idle' });
     } catch (e) {
+      if (ctrl.signal.aborted) return;
       const error = e instanceof TryOnError ? e : new TryOnError('provider', 'Something went wrong.');
       setStatus(error.kind === 'cancelled' ? { kind: 'idle' } : { kind: 'error', error });
     } finally {
@@ -151,15 +166,18 @@ export function TryOnTab() {
 
   async function onAddToCart() {
     if (!product) return;
-    await addToCart({
-      storeName: product.storeName,
-      title: product.title,
-      price: product.price,
-      productImageUrl: garmentUrl,
-      productUrl: product.url,
-      resultId: result?.id ?? null,
-    });
-    setAdded(true);
+    try {
+      await addToCart({
+        storeName: product.storeName,
+        title: product.title,
+        price: product.price,
+        productImageUrl: garmentUrl,
+        productUrl: product.url,
+        resultId: result?.id ?? null,
+      });
+    } catch {
+      setStatus({ kind: 'error', error: new TryOnError('storage', 'Could not add to cart.') });
+    }
   }
 
   return (
@@ -194,8 +212,8 @@ export function TryOnTab() {
             <Button variant="outline" size="sm" className="flex-1" onClick={startPicker}>
               <Crosshair className="size-4" /> Pick image
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => void onAddToCart()} disabled={added}>
-              {added ? <Check className="size-4" /> : <ShoppingBag className="size-4" />} {added ? 'In cart' : 'Add to cart'}
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => void onAddToCart()} disabled={inCart}>
+              {inCart ? <Check className="size-4" /> : <ShoppingBag className="size-4" />} {inCart ? 'In cart' : 'Add to cart'}
             </Button>
           </div>
         </CardContent>
