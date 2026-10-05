@@ -54,6 +54,15 @@ describe('photos', () => {
   });
 });
 
+describe('setPrimaryPhoto with unknown id', () => {
+  it('changes nothing', async () => {
+    const a = await addPhoto(blob, 1, 1);
+    await addPhoto(blob, 1, 1);
+    await setPrimaryPhoto('missing');
+    expect((await listPhotos()).filter((p) => p.primary).map((p) => p.id)).toEqual([a.id]);
+  });
+});
+
 describe('results', () => {
   it('returns the latest result for a product', async () => {
     await saveResult(result(), new Set());

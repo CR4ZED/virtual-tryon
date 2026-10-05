@@ -47,4 +47,11 @@ describe('cart', () => {
     expect(groupByStore(cart).map((g) => [g.storeName, g.items.length])).toEqual([['Myntra', 2], ['Amazon.in', 1]]);
     expect(referencedResultIds(cart)).toEqual(new Set(['r2', 'r3']));
   });
+
+  it('ignores extra runtime fields on add and update, and nulls unsafe image URLs', async () => {
+    const item = await addToCart({ ...dress, bought: true, note: 'x', productImageUrl: 'http://insecure.example.com/a.jpg' } as NewCartItem);
+    expect(item).toMatchObject({ bought: false, note: '', productImageUrl: null });
+    await updateCartItem(item.id, { productUrl: 'https://evil.com' } as never);
+    expect((await getCart())[0]?.productUrl).toBe('https://www.myntra.com/dresses/1');
+  });
 });

@@ -32,15 +32,23 @@ async function save(items: CartItem[]): Promise<void> {
 
 export async function addToCart(input: NewCartItem): Promise<CartItem> {
   if (!isSafeHttpsUrl(input.productUrl)) throw new Error('Only https product pages can be added to the cart.');
-  const productUrl = input.productUrl.replace(/#.*/, '');
+  const productUrl = input.productUrl.split('#', 1)[0] ?? '';
+  const fields: NewCartItem = {
+    storeName: input.storeName,
+    title: input.title,
+    price: input.price,
+    productImageUrl: input.productImageUrl && isSafeHttpsUrl(input.productImageUrl) ? input.productImageUrl : null,
+    productUrl,
+    resultId: input.resultId,
+  };
   const items = await getCart();
   const existing = items.find((i) => i.productUrl === productUrl);
   if (existing) {
-    const updated: CartItem = { ...existing, ...input, productUrl, resultId: input.resultId ?? existing.resultId };
+    const updated: CartItem = { ...existing, ...fields, resultId: input.resultId ?? existing.resultId };
     await save(items.map((i) => (i.id === existing.id ? updated : i)));
     return updated;
   }
-  const item: CartItem = { ...input, productUrl, id: crypto.randomUUID(), store: new URL(productUrl).hostname, note: '', bought: false, addedAt: Date.now() };
+  const item: CartItem = { ...fields, id: crypto.randomUUID(), store: new URL(productUrl).hostname, note: '', bought: false, addedAt: Date.now() };
   await save([...items, item]);
   return item;
 }
@@ -50,7 +58,10 @@ export async function removeFromCart(id: string): Promise<void> {
 }
 
 export async function updateCartItem(id: string, patch: { note?: string; bought?: boolean }): Promise<void> {
-  const clean = { ...patch, ...(patch.note !== undefined && { note: patch.note.slice(0, MAX_NOTE) }) };
+  const clean = {
+    ...(patch.note !== undefined && { note: patch.note.slice(0, MAX_NOTE) }),
+    ...(patch.bought !== undefined && { bought: patch.bought }),
+  };
   await save((await getCart()).map((i) => (i.id === id ? { ...i, ...clean } : i)));
 }
 

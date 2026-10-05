@@ -89,8 +89,11 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = { ...(await getSettings()), ...patch };
-  await (await db()).put('kv', next, 'settings');
+  const tx = (await db()).transaction('kv', 'readwrite');
+  const stored = (await tx.store.get('settings')) as Partial<Settings> | undefined;
+  const next = { ...DEFAULT_SETTINGS, ...stored, ...patch };
+  await tx.store.put(next, 'settings');
+  await tx.done;
   notifyChange('settings');
   return next;
 }
@@ -124,6 +127,10 @@ export async function deletePhoto(id: string): Promise<void> {
 
 export async function setPrimaryPhoto(id: string): Promise<void> {
   const tx = (await db()).transaction('photos', 'readwrite');
+  if (!(await tx.store.get(id))) {
+    await tx.done;
+    return;
+  }
   for (const photo of await tx.store.getAll()) await tx.store.put({ ...photo, primary: photo.id === id });
   await tx.done;
   notifyChange('photos');
