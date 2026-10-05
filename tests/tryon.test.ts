@@ -2,9 +2,13 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { addPhoto, deleteAllData, latestResultFor, saveSettings } from '@/lib/db';
+import { addPhoto, deleteAllData, getSettings, latestResultFor, saveSettings } from '@/lib/db';
 import { runTryOn, type TryOnRequest } from '@/lib/tryon';
 
+vi.mock('@/lib/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/db')>();
+  return { ...actual, getSettings: vi.fn(actual.getSettings) };
+});
 vi.mock('@/lib/imageProcessing', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/imageProcessing')>()),
   normalizeImage: vi.fn(async (blob: Blob) => ({ blob, width: 10, height: 10 })),
@@ -19,14 +23,14 @@ const req: TryOnRequest = {
   matchPose: false,
 };
 
-function garmentOr(providerResponse: () => Response) {
-  return vi.fn(async (url: string | URL | Request) => {
+function garmentOr(providerResponse: (init?: RequestInit) => Response | Promise<Response>) {
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url).startsWith('https://cdn.example.com/')) {
       const res = new Response(PNG);
       Object.defineProperty(res, 'url', { value: String(url) });
       return res;
     }
-    return providerResponse();
+    return providerResponse(init);
   });
 }
 
@@ -70,5 +74,29 @@ describe('runTryOn', () => {
     const pending = runTryOn(req, ctrl.signal);
     ctrl.abort();
     await expect(pending).rejects.toMatchObject({ kind: 'cancelled' });
+  });
+
+  it('reports a user abort during the provider call as cancelled', async () => {
+    await saveSettings({ geminiKey: 'k' });
+    await addPhoto(new Blob(['me'], { type: 'image/jpeg' }), 768, 1024);
+    let providerCalled!: () => void;
+    const called = new Promise<void>((r) => (providerCalled = r));
+    vi.stubGlobal(
+      'fetch',
+      garmentOr((init) => {
+        providerCalled();
+        return new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+      }),
+    );
+    const ctrl = new AbortController();
+    const pending = runTryOn(req, ctrl.signal);
+    await called;
+    ctrl.abort();
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled' });
+  });
+
+  it('wraps unexpected storage failures in a TryOnError', async () => {
+    vi.mocked(getSettings).mockRejectedValueOnce(new Error('boom'));
+    await expect(runTryOn(req, new AbortController().signal)).rejects.toMatchObject({ name: 'TryOnError', kind: 'provider', message: 'boom' });
   });
 });

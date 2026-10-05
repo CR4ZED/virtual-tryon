@@ -19,20 +19,21 @@ export interface TryOnRequest {
 export const TIMEOUT_MS = 90_000;
 
 export async function runTryOn(req: TryOnRequest, signal: AbortSignal): Promise<ResultRecord> {
-  const settings = await getSettings();
-  const providerName = settings.provider === 'gemini' ? 'Gemini' : 'OpenAI';
-  const apiKey = settings.provider === 'gemini' ? settings.geminiKey : settings.openaiKey;
-  if (!apiKey) throw new TryOnError('auth', `Add your ${providerName} API key in Settings.`);
-
-  const photos = await listPhotos();
-  const base = photos.find((p) => p.id === req.basePhotoId) ?? photos.find((p) => p.primary);
-  if (!base) throw new TryOnError('no_photos', 'Upload a photo of yourself in Settings first.');
-  const refs = photos.filter((p) => p.id !== base.id).slice(0, 3);
-
-  if (signal.aborted) throw new TryOnError('cancelled', 'Cancelled.');
   const timeout = AbortSignal.timeout(TIMEOUT_MS);
   const combined = AbortSignal.any([signal, timeout]);
+  let providerName = 'the provider';
   try {
+    const settings = await getSettings();
+    providerName = settings.provider === 'gemini' ? 'Gemini' : 'OpenAI';
+    const apiKey = settings.provider === 'gemini' ? settings.geminiKey : settings.openaiKey;
+    if (!apiKey) throw new TryOnError('auth', `Add your ${providerName} API key in Settings.`);
+
+    const photos = await listPhotos();
+    const base = photos.find((p) => p.id === req.basePhotoId) ?? photos.find((p) => p.primary);
+    if (!base) throw new TryOnError('no_photos', 'Upload a photo of yourself in Settings first.');
+    const refs = photos.filter((p) => p.id !== base.id).slice(0, 3);
+
+    if (signal.aborted) throw new TryOnError('cancelled', 'Cancelled.');
     const raw = await fetchGarment(req.garmentUrl, combined);
     const garment = await normalizeImage(raw).catch(() => {
       throw new TryOnError('garment', 'The product image could not be decoded. Use "Pick image" to choose another photo.');
