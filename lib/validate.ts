@@ -34,6 +34,8 @@ const PRIVATE_IPV4 = [
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[01])\./,
   /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  /^(22[4-9]|23\d|24\d|25[0-5])\./,
+  /^198\.1[89]\./,
 ];
 
 /**
@@ -50,7 +52,7 @@ export function isSafeHttpsUrl(raw: string): boolean {
     return false;
   }
   if (url.protocol !== 'https:' || url.username || url.password) return false;
-  const host = url.hostname.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
   if (host === 'localhost' || /\.(localhost|local|internal|lan|home\.arpa)$/.test(host)) return false;
   if (host.startsWith('[')) return !/^\[(::1?\]|f[cd]|fe[89ab]|::ffff:)/.test(host);
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return !PRIVATE_IPV4.some((re) => re.test(host));
