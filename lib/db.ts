@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   geminiKey: '',
   openaiKey: '',
   geminiModel: 'gemini-3.1-flash-image',
-  openaiModel: 'gpt-image-2',
+  openaiModel: 'gpt-image-2.5-sunburst',
 };
 
 export interface PhotoRecord {

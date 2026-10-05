@@ -18,6 +18,21 @@ const OPENAI_IMAGE = /^gpt-image-/;
 const OPENAI_LOW_FIDELITY = /^gpt-image-1-mini/;
 const MAX_PAGES = 5;
 
+// Defaults chosen after a key is verified, best first. A bare id also matches its
+// dated or variant snapshots (e.g. "gpt-image-2.5" matches "gpt-image-2.5-flare").
+const PREFERRED_MODELS: Record<ProviderId, string[]> = {
+  gemini: ['gemini-3.1-flash-image'],
+  openai: ['gpt-image-2.5-sunburst', 'gpt-image-2.5', 'gpt-image-2'],
+};
+
+export function pickDefaultModel(provider: ProviderId, models: ModelOption[]): ModelOption | undefined {
+  for (const id of PREFERRED_MODELS[provider]) {
+    const hit = models.find((m) => m.id === id) ?? models.find((m) => m.id.startsWith(`${id}-`));
+    if (hit) return hit;
+  }
+  return models[0];
+}
+
 export function preservesIdentity(provider: ProviderId, id: string): boolean {
   return provider === 'gemini' ? GEMINI_IMAGE.test(id) : OPENAI_IMAGE.test(id) && !OPENAI_LOW_FIDELITY.test(id);
 }

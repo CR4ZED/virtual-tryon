@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { useSettings } from '@/hooks/useData';
 import { saveSettings } from '@/lib/db';
 import type { ProviderId } from '@/lib/providers/common';
-import { listModels, type ModelOption } from '@/lib/providers/models';
+import { listModels, pickDefaultModel, type ModelOption } from '@/lib/providers/models';
 
 type KeyField = 'geminiKey' | 'openaiKey';
 type Check = { state: 'idle' } | { state: 'checking' } | { state: 'ok'; models: ModelOption[] } | { state: 'error'; message: string };
@@ -91,22 +91,27 @@ export function ProviderCard() {
     await saveSettings(trimmed);
     const [gemini, openai] = await Promise.all(PROVIDERS.map((p) => verify(p.id, trimmed[p.keyField])));
     const available: Record<ProviderId, ModelOption[]> = { gemini: gemini ?? [], openai: openai ?? [] };
-    // Keep the current choice if it is still offered; otherwise pick the first available model.
+    // Keep the current choice if it is still offered; otherwise pick the best default,
+    // trying the current provider first.
     if (!available[settings.provider].some((m) => m.id === selectedId)) {
-      const first = [...available[settings.provider], ...available.gemini, ...available.openai][0];
-      if (first) await selectModel(first.provider, first.id);
+      const order: ProviderId[] = settings.provider === 'gemini' ? ['gemini', 'openai'] : ['openai', 'gemini'];
+      const pick = order.map((p) => pickDefaultModel(p, available[p])).find(Boolean);
+      if (pick) await selectModel(pick.provider, pick.id);
     }
   }
 
   const groups = PROVIDERS.map((p) => {
     const check = checks[p.id];
     const models = check.state === 'ok' ? check.models : [];
-    // Keep the saved choice visible even if it could not be listed (offline, rate limited).
-    const keepSelected = p.id === settings.provider && settings[p.keyField] && !models.some((m) => m.id === selectedId);
+    // Keep the saved choice visible while its key could not be checked (offline, rate limited).
+    // Once a key is verified, only listed models are offered.
+    const keepSelected =
+      p.id === settings.provider && settings[p.keyField] && check.state !== 'ok' && !models.some((m) => m.id === selectedId);
     return { ...p, models: keepSelected ? [{ provider: p.id, id: selectedId, label: selectedId }, ...models] : models };
   }).filter((g) => g.models.length > 0);
 
   const checking = checks.gemini.state === 'checking' || checks.openai.state === 'checking';
+  const hasSelection = groups.some((g) => g.id === settings.provider && g.models.some((m) => m.id === selectedId));
 
   return (
     <Card>
@@ -145,7 +150,7 @@ export function ProviderCard() {
           <div className="grid gap-2">
             <Label htmlFor="model">Image model</Label>
             <Select
-              value={groups.length ? optionValue(settings.provider, selectedId) : undefined}
+              value={hasSelection ? optionValue(settings.provider, selectedId) : ''}
               onValueChange={(v) => {
                 const [provider, ...rest] = v.split(':');
                 void selectModel(provider as ProviderId, rest.join(':'));
@@ -153,7 +158,7 @@ export function ProviderCard() {
               disabled={groups.length === 0}
             >
               <SelectTrigger id="model" className="w-full">
-                <SelectValue placeholder="Save a working key to load models" />
+                <SelectValue placeholder={groups.length ? 'Choose a model' : 'Save a working key to load models'} />
               </SelectTrigger>
               <SelectContent>
                 {groups.map((g) => (

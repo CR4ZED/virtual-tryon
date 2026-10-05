@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { ImagePlus, Star, Trash2 } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, ImagePlus, Info, Star, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,14 +32,19 @@ function PhotoTile({ photo }: { photo: PhotoRecord }) {
 
 export function PhotosCard() {
   const photos = usePhotos() ?? [];
-  const [messages, setMessages] = useState<string[]>([]);
+  // Errors: the photo was not added. Warnings: added, but results may suffer.
+  const [errors, setErrors] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
     setBusy(true);
+    setErrors([]);
+    setWarnings([]);
     const out: string[] = [];
+    const warn: string[] = [];
     try {
       let count = photos.length;
       for (const file of Array.from(files)) {
@@ -59,16 +64,17 @@ export function PhotosCard() {
           out.push(`${file.name}: this image could not be read.`);
           continue;
         }
-        if (Math.min(img.width, img.height) < MIN_PHOTO_SHORT_EDGE) out.push(`${file.name}: low resolution, results may look blurry.`);
         try {
           await addPhoto(img.blob, img.width, img.height);
           count++;
+          if (Math.min(img.width, img.height) < MIN_PHOTO_SHORT_EDGE) warn.push(`${file.name}: low resolution, results may look blurry.`);
         } catch (e) {
           out.push(`${file.name}: ${e instanceof Error && /photos/.test(e.message) ? e.message : 'could not be saved.'}`);
         }
       }
     } finally {
-      setMessages(out);
+      setErrors(out);
+      setWarnings(warn);
       setBusy(false);
       if (input.current) input.current.value = '';
     }
@@ -100,11 +106,28 @@ export function PhotosCard() {
           )}
         </div>
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
-        {messages.length > 0 && (
-          <Alert>
+        {errors.length > 0 && (
+          <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
+            <AlertCircle />
+            <AlertTitle>
+              {errors.length === 1 ? "1 photo wasn't added" : `${errors.length} photos weren't added`}
+            </AlertTitle>
             <AlertDescription>
               <ul className="list-disc pl-4">
-                {messages.map((m, i) => (
+                {errors.map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+        {warnings.length > 0 && (
+          <Alert>
+            <Info />
+            <AlertTitle>Added, but check the quality</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc pl-4">
+                {warnings.map((m, i) => (
                   <li key={i}>{m}</li>
                 ))}
               </ul>
