@@ -259,7 +259,10 @@ export function TryOnTab() {
           <Button className="flex-1" disabled>
             <Loader2 className="size-4 animate-spin" /> Generating… <Elapsed since={status.startedAt} />
           </Button>
-          <Button variant="outline" onClick={() => abortRef.current?.abort()}>
+          <Button variant="outline" onClick={() => {
+              abortRef.current?.abort();
+              setStatus({ kind: 'idle' });
+            }}>
             <X className="size-4" /> Cancel
           </Button>
         </div>
