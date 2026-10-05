@@ -44,7 +44,7 @@ export async function addToCart(input: NewCartItem): Promise<CartItem> {
   const items = await getCart();
   const existing = items.find((i) => i.productUrl === productUrl);
   if (existing) {
-    const updated: CartItem = { ...existing, ...fields, resultId: input.resultId ?? existing.resultId };
+    const updated: CartItem = { ...existing, ...fields, productImageUrl: fields.productImageUrl ?? existing.productImageUrl, resultId: input.resultId ?? existing.resultId };
     await save(items.map((i) => (i.id === existing.id ? updated : i)));
     return updated;
   }

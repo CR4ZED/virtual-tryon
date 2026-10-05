@@ -72,8 +72,10 @@ export function TryOnTab() {
   const [matchPose, setMatchPose] = useState(false);
   const [result, setResult] = useState<ResultRecord | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
-  const [inCart, setInCart] = useState(false);
+  const [cartItem, setCartItem] = useState<CartItem | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const productUrlRef = useRef(product?.url);
+  productUrlRef.current = product?.url;
 
   const base = photos?.find((p) => p.id === baseId) ?? photos?.find((p) => p.primary) ?? null;
   const resultBase = photos?.find((p) => p.id === result?.basePhotoId) ?? base;
@@ -82,9 +84,9 @@ export function TryOnTab() {
 
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
-    abortRef.current?.abort();
+    // A running generation keeps going across product changes; its result is saved by runTryOn.
     setResult(null);
-    setStatus({ kind: 'idle' });
+    setStatus((s) => (s.kind === 'running' ? s : { kind: 'idle' }));
     let live = true;
     if (product) void latestResultFor(product.url).then((r) => live && setResult(r ?? null));
     return () => {
@@ -93,7 +95,7 @@ export function TryOnTab() {
   }, [product?.url]);
   useEffect(() => {
     const url = product?.url.split('#', 1)[0];
-    const sync = (items: CartItem[]) => setInCart(items.some((i) => i.productUrl === url));
+    const sync = (items: CartItem[]) => setCartItem(items.find((i) => i.productUrl === url) ?? null);
     let live = true;
     void getCart().then((items) => live && sync(items));
     const off = onCartChanged(sync);
@@ -143,20 +145,25 @@ export function TryOnTab() {
   const apiKey = settings.provider === 'gemini' ? settings.geminiKey : settings.openaiKey;
   const providerName = settings.provider === 'gemini' ? 'Gemini' : 'OpenAI';
   const running = status.kind === 'running';
+  const inCart = !!cartItem;
+  const canUpdateCart = !!(result && cartItem && cartItem.resultId !== result.id);
+  const cartLabel = canUpdateCart ? 'Update cart' : inCart ? 'In cart' : 'Add to cart';
   const thumbnails = [...new Set([product.garmentImage, ...product.gallery, garmentUrl].filter((u): u is string => !!u))];
 
   async function generate() {
     if (!product || !garmentUrl || !base) return;
+    const forUrl = product.url;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setStatus({ kind: 'running', startedAt: Date.now() });
     try {
       const rec = await runTryOn({ productUrl: product.url, garmentUrl, title: product.title, basePhotoId: base.id, matchPose }, ctrl.signal);
       if (ctrl.signal.aborted) return;
-      setResult(rec);
+      if (productUrlRef.current === forUrl) setResult(rec);
       setStatus({ kind: 'idle' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
+      if (productUrlRef.current !== forUrl) return setStatus({ kind: 'idle' });
       const error = e instanceof TryOnError ? e : new TryOnError('provider', 'Something went wrong.');
       setStatus(error.kind === 'cancelled' ? { kind: 'idle' } : { kind: 'error', error });
     } finally {
@@ -212,8 +219,8 @@ export function TryOnTab() {
             <Button variant="outline" size="sm" className="flex-1" onClick={startPicker}>
               <Crosshair className="size-4" /> Pick image
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => void onAddToCart()} disabled={inCart}>
-              {inCart ? <Check className="size-4" /> : <ShoppingBag className="size-4" />} {inCart ? 'In cart' : 'Add to cart'}
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => void onAddToCart()} disabled={inCart && !canUpdateCart}>
+              {inCart && !canUpdateCart ? <Check className="size-4" /> : <ShoppingBag className="size-4" />} {cartLabel}
             </Button>
           </div>
         </CardContent>

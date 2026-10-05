@@ -39,7 +39,7 @@ The Settings page opens from the extension's side panel (gear icon) or from `chr
 
 ## Set up
 
-1. **Paste one or both API keys and click Save and verify keys.** The extension checks each key by listing its image models, then you pick a model from one dropdown grouped by provider. Keys are entered in Settings, not in a `.env` file. Anything in a `.env` file would be compiled into the extension's JavaScript, where anyone with the folder could read it. Settings stores the key in the extension's private browser storage, which web pages and the extension's page scripts cannot read.
+1. **Paste one or both API keys and click Save and verify keys.** The extension checks each key by listing its image models, then you pick a model from one dropdown grouped by provider. Keys are entered in Settings, not in a `.env` file. Anything in a `.env` file would be compiled into the extension's JavaScript, where anyone with the folder could read it. Settings stores the key in the extension's private browser storage, which web pages and the extension's content scripts cannot read.
 2. **Upload 1–4 photos.** Mark the best one as primary; it is the photo that gets dressed. The others help the AI keep your identity.
    - Full body, head to feet, facing the camera
    - Even light, plain background, nobody else in the frame
@@ -89,6 +89,7 @@ npm run zip        # zip for sharing
 - [ ] Picker highlights images, Esc cancels, click selects and the page does not navigate
 - [ ] Gemini and OpenAI each generate a result; the face and body match the original
 - [ ] Cancel during generation returns to idle without an error
+- [ ] Switch tabs during generation; the result appears when you return
 - [ ] Invalid key shows the settings prompt
 - [ ] Slider works with mouse and arrow keys
 - [ ] Cart persists after restarting Chrome; "Shop at" opens the product tabs

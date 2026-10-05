@@ -40,29 +40,38 @@ export function PhotosCard() {
     if (!files?.length) return;
     setBusy(true);
     const out: string[] = [];
-    let count = photos.length;
-    for (const file of Array.from(files)) {
-      if (count >= MAX_PHOTOS) {
-        out.push(`${file.name}: you can store up to ${MAX_PHOTOS} photos.`);
-        continue;
-      }
-      const check = await validateUpload(file);
-      if (!check.ok) {
-        out.push(`${file.name}: ${check.error}`);
-        continue;
-      }
-      try {
-        const img = await normalizeImage(file);
+    try {
+      let count = photos.length;
+      for (const file of Array.from(files)) {
+        if (count >= MAX_PHOTOS) {
+          out.push(`${file.name}: you can store up to ${MAX_PHOTOS} photos.`);
+          continue;
+        }
+        const check = await validateUpload(file);
+        if (!check.ok) {
+          out.push(`${file.name}: ${check.error}`);
+          continue;
+        }
+        let img;
+        try {
+          img = await normalizeImage(file);
+        } catch {
+          out.push(`${file.name}: this image could not be read.`);
+          continue;
+        }
         if (Math.min(img.width, img.height) < MIN_PHOTO_SHORT_EDGE) out.push(`${file.name}: low resolution, results may look blurry.`);
-        await addPhoto(img.blob, img.width, img.height);
-        count++;
-      } catch {
-        out.push(`${file.name}: this image could not be read.`);
+        try {
+          await addPhoto(img.blob, img.width, img.height);
+          count++;
+        } catch (e) {
+          out.push(`${file.name}: ${e instanceof Error && /photos/.test(e.message) ? e.message : 'could not be saved.'}`);
+        }
       }
+    } finally {
+      setMessages(out);
+      setBusy(false);
+      if (input.current) input.current.value = '';
     }
-    setMessages(out);
-    setBusy(false);
-    if (input.current) input.current.value = '';
   }
 
   return (
@@ -95,8 +104,8 @@ export function PhotosCard() {
           <Alert>
             <AlertDescription>
               <ul className="list-disc pl-4">
-                {messages.map((m) => (
-                  <li key={m}>{m}</li>
+                {messages.map((m, i) => (
+                  <li key={i}>{m}</li>
                 ))}
               </ul>
             </AlertDescription>

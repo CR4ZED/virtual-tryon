@@ -25,6 +25,13 @@ describe('cart', () => {
     expect(cart[0]).toMatchObject({ store: 'www.myntra.com', productUrl: 'https://www.myntra.com/dresses/1', resultId: 'r1', bought: false, note: '' });
   });
 
+  it('keeps the existing product image when an update has none or an unsafe one', async () => {
+    await addToCart(dress);
+    await addToCart({ ...dress, productImageUrl: null });
+    await addToCart({ ...dress, productImageUrl: 'http://insecure.example.com/a.jpg' });
+    expect((await getCart())[0]?.productImageUrl).toBe(dress.productImageUrl);
+  });
+
   it('rejects non-https product URLs', async () => {
     await expect(addToCart({ ...dress, productUrl: 'http://shop.example.com/p' })).rejects.toThrow();
   });

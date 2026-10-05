@@ -36,6 +36,7 @@ export default defineContentScript({
         button = null;
       }
       if (button?.host.isConnected) return;
+      if (product && mounts >= MAX_ATTEMPTS_PER_URL) return;
       if (!product && attempts >= MAX_ATTEMPTS_PER_URL) return;
       attempts++;
       const next = detectProduct(document, location.href);

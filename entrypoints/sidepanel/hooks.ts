@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ProductInfo } from '@/lib/detect';
 import { parseMessage, parseProduct, type Message } from '@/lib/messages';
 import { isSafeHttpsUrl } from '@/lib/validate';
@@ -42,10 +42,16 @@ export function useProduct(tab: ActiveTab | null) {
   const [garmentUrl, setGarmentUrl] = useState<string | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
 
+  const prev = useRef<{ id: number; url: string } | null>(null);
+
   useEffect(() => {
-    setProduct(null);
-    setGarmentUrl(null);
-    setReachable(null);
+    // A status-only change re-queries without clearing, so there is no flicker and a picked image survives.
+    if (prev.current?.id !== tab?.id || prev.current?.url !== tab?.url) {
+      setProduct(null);
+      setGarmentUrl(null);
+      setReachable(null);
+    }
+    prev.current = tab ? { id: tab.id, url: tab.url } : null;
     if (!tab) return;
     let live = true;
     browser.tabs
@@ -54,8 +60,8 @@ export function useProduct(tab: ActiveTab | null) {
         if (!live) return;
         setReachable(true);
         const p = raw ? parseProduct(raw) : null;
-        setProduct(p);
-        setGarmentUrl(p?.garmentImage ?? null);
+        setProduct((cur) => p ?? cur);
+        setGarmentUrl((cur) => cur ?? p?.garmentImage ?? null);
       })
       .catch(() => {
         // No content script: browser page, http page, or tab opened before install.
